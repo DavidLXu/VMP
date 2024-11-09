@@ -23,20 +23,17 @@ python ase/run.py --task HumanoidAMP --cfg_env ase/data/cfg/humanoid_sword_shiel
 # to test whether amp can replicate the walk forward motion
 python ase/run.py --task HumanoidAMP --cfg_env ase/data/cfg/humanoid_sword_shield.yaml --cfg_train ase/data/cfg/train/rlg/amp_humanoid.yaml --motion_file ase/data/motions/walk/RL_Avatar_WalkForward01_Motion.npy --num_envs 1024 --minibatch_size 1024
 
-# looks good
-python ase/run.py --test --task HumanoidAMP --num_envs 16 --cfg_env ase/data/cfg/humanoid_sword_shield.yaml --cfg_train ase/data/cfg/train/rlg/amp_humanoid.yaml --motion_file ase/data/motions/walk/RL_Avatar_WalkForward01_Motion.npy --checkpoint /data/ASE/output/Humanoid_09-03-17-33-amp-walk-forward/nn/Humanoid.pth
-
-# if load delibrately motion which is not trained, could fall
-python ase/run.py --test --task HumanoidAMP --num_envs 16 --cfg_env ase/data/cfg/humanoid_sword_shield.yaml --cfg_train ase/data/cfg/train/rlg/amp_humanoid.yaml --motion_file ase/data/motions/walk/RL_Avatar_WalkRight01_Motion.npy --checkpoint /data/ASE/output/Humanoid_09-03-17-33-amp-walk-forward/nn/Humanoid.pth
-python ase/run.py --test --task HumanoidAMP --num_envs 16 --cfg_env ase/data/cfg/humanoid_sword_shield.yaml --cfg_train ase/data/cfg/train/rlg/amp_humanoid.yaml --motion_file ase/data/motions/walk/RL_Avatar_TurnLeft90_Motion.npy --checkpoint /data/ASE/output/Humanoid_09-03-17-33-amp-walk-forward/nn/Humanoid.pth
-
-
 # now try training a combo of walk motions
 python ase/run.py --task HumanoidAMP --cfg_env ase/data/cfg/humanoid_sword_shield.yaml --cfg_train ase/data/cfg/train/rlg/amp_humanoid.yaml --motion_file ase/data/motions/walk/dataset_reallusion_walk.yaml --num_envs 1024 --minibatch_size 1024 --checkpoint /data/ASE/output/Humanoid_09-03-17-33-amp-walk-forward/nn/Humanoid.pth
 
 
+# looks good
+python ase/run.py --test --task HumanoidAMP --num_envs 16 --cfg_env ase/data/cfg/humanoid_sword_shield.yaml --cfg_train ase/data/cfg/train/rlg/amp_humanoid.yaml --motion_file ase/data/motions/walk/RL_Avatar_WalkBackward01_Motion.npy --checkpoint /data/ASE/output/Humanoid_09-18-59-36-amp-walk-turn/nn/Humanoid.pth
+python ase/run.py --test --task HumanoidAMP --num_envs 16 --cfg_env ase/data/cfg/humanoid_sword_shield.yaml --cfg_train ase/data/cfg/train/rlg/amp_humanoid.yaml --motion_file ase/data/motions/walk/RL_Avatar_WalkRight01_Motion.npy --checkpoint /data/ASE/output/Humanoid_09-18-59-36-amp-walk-turn/nn/Humanoid.pth
+python ase/run.py --test --task HumanoidAMP --num_envs 16 --cfg_env ase/data/cfg/humanoid_sword_shield.yaml --cfg_train ase/data/cfg/train/rlg/amp_humanoid.yaml --motion_file ase/data/motions/walk/RL_Avatar_TurnLeft90_Motion.npy --checkpoint /data/ASE/output/Humanoid_09-18-59-36-amp-walk-turn/nn/Humanoid.pth
 
-
+# 
+python ase/run.py --test --task HumanoidAMP --num_envs 16 --cfg_env ase/data/cfg/humanoid_sword_shield.yaml --cfg_train ase/data/cfg/train/rlg/amp_humanoid.yaml --motion_file ase/data/motions/walk/dataset_reallusion_walk.yaml --checkpoint /data/ASE/output/Humanoid_09-18-59-36-amp-walk-turn/nn/Humanoid.pth
 
 
 

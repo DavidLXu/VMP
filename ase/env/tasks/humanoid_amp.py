@@ -48,6 +48,7 @@ class HumanoidAMP(Humanoid):
         Hybrid = 3
 
     def __init__(self, cfg, sim_params, physics_engine, device_type, device_id, headless):
+
         state_init = cfg["env"]["stateInit"]
         self._state_init = HumanoidAMP.StateInit[state_init]
         self._hybrid_init_prob = cfg["env"]["hybridInitProb"]
@@ -90,6 +91,7 @@ class HumanoidAMP(Humanoid):
         return self._num_amp_obs_steps * self._num_amp_obs_per_step
 
     def fetch_amp_obs_demo(self, num_samples):
+        # not used in --test mode (called by amp_agent in training)
 
         if (self._amp_obs_demo_buf is None):
             self._build_amp_obs_demo_buf(num_samples)
@@ -97,7 +99,6 @@ class HumanoidAMP(Humanoid):
             assert(self._amp_obs_demo_buf.shape[0] == num_samples)
         
         motion_ids = self._motion_lib.sample_motions(num_samples)
-        
         # since negative times are added to these values in build_amp_obs_demo,
         # we shift them into the range [0 + truncate_time, end of clip]
         truncate_time = self.dt * (self._num_amp_obs_steps - 1)
@@ -111,6 +112,7 @@ class HumanoidAMP(Humanoid):
         return amp_obs_demo_flat
 
     def build_amp_obs_demo(self, motion_ids, motion_times0):
+        # not used in --test mode (called by amp_agent in training)
         dt = self.dt
 
         motion_ids = torch.tile(motion_ids.unsqueeze(-1), [1, self._num_amp_obs_steps])
@@ -149,6 +151,7 @@ class HumanoidAMP(Humanoid):
         return
 
     def _load_motion(self, motion_file):
+        
         assert(self._dof_offsets[-1] == self.num_dof)
         self._motion_lib = MotionLib(motion_file=motion_file,
                                      dof_body_ids=self._dof_body_ids,
@@ -188,7 +191,7 @@ class HumanoidAMP(Humanoid):
     def _reset_ref_state_init(self, env_ids):
         num_envs = env_ids.shape[0]
         motion_ids = self._motion_lib.sample_motions(num_envs)
-        
+
         if (self._state_init == HumanoidAMP.StateInit.Random
             or self._state_init == HumanoidAMP.StateInit.Hybrid):
             motion_times = self._motion_lib.sample_time(motion_ids)

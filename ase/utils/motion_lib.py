@@ -62,7 +62,7 @@ class DeviceCache:
         for k in keys:
             try:
                 out = getattr(obj, k)
-                print('Succ for key=', k)
+                # print('Succ for key=', k)
             except:
                 print("Error for key=", k)
                 continue
@@ -135,14 +135,18 @@ class MotionLib():
         return motion_ids
 
     def sample_time(self, motion_ids, truncate_time=None):
+        '''
+        sample a specific moment in a motion
+        truncate_time: prevent the selected motion clip to exceed the motion length
+        the sampled moment is controlled by phase (0~1)
+        '''
         n = len(motion_ids)
         phase = torch.rand(motion_ids.shape, device=self._device)
-        
+        # length in seconds
         motion_len = self._motion_lengths[motion_ids]
         if (truncate_time is not None):
             assert(truncate_time >= 0.0)
             motion_len -= truncate_time
-
         motion_time = phase * motion_len
         return motion_time
 

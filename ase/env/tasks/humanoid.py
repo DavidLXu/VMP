@@ -70,7 +70,7 @@ class Humanoid(BaseTask):
         super().__init__(cfg=self.cfg)
         
         self.dt = self.control_freq_inv * sim_params.dt
-        
+
         # get gym GPU state tensors
         actor_root_state = self.gym.acquire_actor_root_state_tensor(self.sim)
         dof_state_tensor = self.gym.acquire_dof_state_tensor(self.sim)
