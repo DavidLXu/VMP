@@ -1,0 +1,14 @@
+motions:
+  - file: "RL_Avatar_WalkBackward01_Motion.npy"
+    weight: 0.16666
+  - file: "RL_Avatar_WalkLeft01_Motion.npy"
+    weight: 0.16666
+  - file: "RL_Avatar_WalkRight01_Motion.npy"
+    weight: 0.16666
+  - file: "RL_Avatar_WalkForward01_Motion.npy"
+    weight: 0.16666
+  - file: "RL_Avatar_TurnLeft90_Motion.npy"
+    weight: 0.16666
+  - file: "RL_Avatar_TurnRight90_Motion.npy"
+    weight: 0.16666
+

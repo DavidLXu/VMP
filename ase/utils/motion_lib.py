@@ -62,6 +62,7 @@ class DeviceCache:
         for k in keys:
             try:
                 out = getattr(obj, k)
+                print('Succ for key=', k)
             except:
                 print("Error for key=", k)
                 continue
