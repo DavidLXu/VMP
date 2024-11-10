@@ -37,6 +37,8 @@ from env.tasks.humanoid_perturb import HumanoidPerturb
 from env.tasks.humanoid_view_motion import HumanoidViewMotion
 from env.tasks.vec_task_wrappers import VecTaskPythonWrapper
 
+from env.tasks.humanoid_vmp import HumanoidVMP
+
 from isaacgym import rlgpu
 
 import json

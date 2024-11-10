@@ -36,6 +36,16 @@ python ase/run.py --test --task HumanoidAMP --num_envs 16 --cfg_env ase/data/cfg
 python ase/run.py --test --task HumanoidAMP --num_envs 16 --cfg_env ase/data/cfg/humanoid_sword_shield.yaml --cfg_train ase/data/cfg/train/rlg/amp_humanoid.yaml --motion_file ase/data/motions/walk/dataset_reallusion_walk.yaml --checkpoint /data/ASE/output/Humanoid_09-18-59-36-amp-walk-turn/nn/Humanoid.pth
 
 
+# vmp
+python ase/run.py --task HumanoidAMP \
+    --cfg_env ase/data/cfg/humanoid_sword_shield.yaml \
+    --cfg_train ase/data/cfg/train/rlg/vmp_humanoid.yaml \
+    --motion_file ase/data/motions/walk/dataset_reallusion_walk.yaml
+
+python ase/run.py --task HumanoidVMP \
+    --cfg_env ase/data/cfg/humanoid_sword_shield.yaml \
+    --cfg_train ase/data/cfg/train/rlg/vmp_humanoid.yaml \
+    --motion_file ase/data/motions/walk/dataset_reallusion_walk.yaml
 
 
 

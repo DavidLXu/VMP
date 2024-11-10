@@ -56,6 +56,12 @@ from learning import hrl_players
 from learning import hrl_models
 from learning import hrl_network_builder
 
+# for disney VMP implementation
+from learning import vmp_agent
+from learning import vmp_players
+from learning import vmp_models
+from learning import vmp_network_builder
+
 args = None
 cfg = None
 cfg_train = None
@@ -195,6 +201,12 @@ def build_alg_runner(algo_observer):
     runner.model_builder.model_factory.register_builder('hrl', lambda network, **kwargs : hrl_models.ModelHRLContinuous(network))  
     runner.model_builder.network_factory.register_builder('hrl', lambda **kwargs : hrl_network_builder.HRLBuilder())
     
+    # for disney VMP implementation
+    runner.algo_factory.register_builder('vmp', lambda **kwargs : vmp_agent.VMPAgent(**kwargs))
+    runner.player_factory.register_builder('vmp', lambda **kwargs : vmp_players.VMPPlayer(**kwargs))
+    runner.model_builder.model_factory.register_builder('vmp', lambda network, **kwargs : vmp_models.ModelVMPContinuous(network))  
+    runner.model_builder.network_factory.register_builder('vmp', lambda **kwargs : vmp_network_builder.VMPBuilder())
+
     return runner
 
 def main():

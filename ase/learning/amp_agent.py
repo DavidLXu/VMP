@@ -562,6 +562,7 @@ class AMPAgent(common_agent.CommonAgent):
 
     def _preproc_amp_obs(self, amp_obs):
         if self._normalize_amp_input:
+            # NOTE: normalize is True for default
             amp_obs = self._amp_input_mean_std(amp_obs)
         return amp_obs
 

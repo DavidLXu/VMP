@@ -3,7 +3,7 @@ from isaacgym import gymtorch
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from motion_loader import MotionDataset
+from vmp.motion_loader import MotionDataset
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -127,114 +127,126 @@ def vae_loss(reconstructed, original, mu, logvar, beta=0.002):
     kl_divergence = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
     return recon_loss + beta * kl_divergence, recon_loss, kl_divergence
 
-# Training setup with RAdam optimizer and cosine annealing
-motion_combo = "/data/ASE/ase/data/motions/walk/dataset_reallusion_walk.yaml"
-motion_clip = "/data/ASE/ase/data/motions/walk/RL_Avatar_WalkForward01_Motion.npy"
+def save_encoder_state(vae, path='encoder_only.pt'):
+    encoder_state = {
+        'encoder_state_dict': vae.encoder.state_dict(),
+        'input_dim': vae.encoder.conv1.in_channels,
+        'latent_dim': vae.encoder.fc_mu.out_features
+    }
+    torch.save(encoder_state, path)
+    print(f"Encoder state saved to {path}")
 
-motion_dataset = MotionDataset(motion_file=motion_combo,
-                        num_motions=100000,
-                        window_length=30)  # 1 second window
+if __name__ == "__main__":
+    # Training setup with RAdam optimizer and cosine annealing
+    motion_combo = "/data/ASE/ase/data/motions/walk/dataset_reallusion_walk.yaml"
+    motion_clip = "/data/ASE/ase/data/motions/walk/RL_Avatar_WalkForward01_Motion.npy"
 
-motion_dataloader = DataLoader(motion_dataset, batch_size=512, shuffle=True)
+    motion_dataset = MotionDataset(motion_file=motion_combo,
+                            num_motions=100000,
+                            window_length=30)  # 1 second window
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    motion_dataloader = DataLoader(motion_dataset, batch_size=512, shuffle=True)
 
-vae = VAE(input_dim=93).to(device)  # input_dim is feature_dim since we transpose
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-# Print total number of parameters
-total_params = sum(p.numel() for p in vae.parameters())
-print(f"Total number of parameters: {total_params:,}")
+    vae = VAE(input_dim=93).to(device)  # input_dim is feature_dim since we transpose
 
-optimizer = torch.optim.RAdam(vae.parameters(), lr=0.003)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10)
+    # Print total number of parameters
+    total_params = sum(p.numel() for p in vae.parameters())
+    print(f"Total number of parameters: {total_params:,}")
 
-# Initialize tensorboard writer
-writer = SummaryWriter('runs/vae_training')
+    optimizer = torch.optim.RAdam(vae.parameters(), lr=0.003)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10)
 
-num_epochs = 200
-best_loss = float('inf')
+    # Initialize tensorboard writer
+    writer = SummaryWriter('runs/vae_training')
 
-for epoch in range(num_epochs):
-    vae.train()
-    total_loss = 0
-    total_recon_loss = 0
-    total_kl_loss = 0
-    num_batches = 0
-    for batch in motion_dataloader:
-        batch = batch.to(device)
-        optimizer.zero_grad()
-        
-        reconstructed, mu, logvar = vae(batch)
-        loss, recon_loss, kl_loss = vae_loss(reconstructed, batch, mu, logvar, beta=vae.beta)
-        
-        if torch.isnan(loss):
-            print(f"NaN loss detected!")
-            print(f"mu stats: min={mu.min()}, max={mu.max()}, mean={mu.mean()}")
-            print(f"logvar stats: min={logvar.min()}, max={logvar.max()}, mean={logvar.mean()}")
-            print(f"reconstructed stats: min={reconstructed.min()}, max={reconstructed.max()}, mean={reconstructed.mean()}")
-            continue
+    num_epochs = 200
+    best_loss = float('inf')
+
+    for epoch in range(num_epochs):
+        vae.train()
+        total_loss = 0
+        total_recon_loss = 0
+        total_kl_loss = 0
+        num_batches = 0
+        for batch in motion_dataloader:
+            batch = batch.to(device)
+            optimizer.zero_grad()
             
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(vae.parameters(), max_norm=1.0)
-        optimizer.step()
+            reconstructed, mu, logvar = vae(batch)
+            loss, recon_loss, kl_loss = vae_loss(reconstructed, batch, mu, logvar, beta=vae.beta)
+            
+            if torch.isnan(loss):
+                print(f"NaN loss detected!")
+                print(f"mu stats: min={mu.min()}, max={mu.max()}, mean={mu.mean()}")
+                print(f"logvar stats: min={logvar.min()}, max={logvar.max()}, mean={logvar.mean()}")
+                print(f"reconstructed stats: min={reconstructed.min()}, max={reconstructed.max()}, mean={reconstructed.mean()}")
+                continue
+                
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(vae.parameters(), max_norm=1.0)
+            optimizer.step()
+            
+            total_loss += loss.item()
+            total_recon_loss += recon_loss.item()
+            total_kl_loss += kl_loss.item()
+            num_batches += 1
         
-        total_loss += loss.item()
-        total_recon_loss += recon_loss.item()
-        total_kl_loss += kl_loss.item()
-        num_batches += 1
-    
-    scheduler.step()
-    avg_loss = total_loss / num_batches
-    avg_recon_loss = total_recon_loss / num_batches
-    avg_kl_loss = total_kl_loss / num_batches
-    
-    # Log training metrics
-    writer.add_scalar('Loss/train', avg_loss, epoch)
-    writer.add_scalar('Loss/reconstruction', avg_recon_loss, epoch)
-    writer.add_scalar('Loss/kl_divergence', avg_kl_loss, epoch)
-    writer.add_scalar('Learning_rate', scheduler.get_last_lr()[0], epoch)
-    
-    print(f"Epoch [{epoch + 1}/{num_epochs}], Average Loss: {avg_loss:.4f}")
+        scheduler.step()
+        avg_loss = total_loss / num_batches
+        avg_recon_loss = total_recon_loss / num_batches
+        avg_kl_loss = total_kl_loss / num_batches
+        
+        # Log training metrics
+        writer.add_scalar('Loss/train', avg_loss, epoch)
+        writer.add_scalar('Loss/reconstruction', avg_recon_loss, epoch)
+        writer.add_scalar('Loss/kl_divergence', avg_kl_loss, epoch)
+        writer.add_scalar('Learning_rate', scheduler.get_last_lr()[0], epoch)
+        
+        print(f"Epoch [{epoch + 1}/{num_epochs}], Average Loss: {avg_loss:.4f}")
 
-    # Save checkpoint if loss improved
-    if avg_loss < best_loss:
-        best_loss = avg_loss
-        checkpoint = {
-            'epoch': epoch,
-            'model_state_dict': vae.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
-            'loss': best_loss,
-        }
-        torch.save(checkpoint, 'vae_best.pt')
-        print(f"Checkpoint saved at epoch {epoch + 1} with loss {best_loss:.4f}")
+        # Save checkpoint if loss improved
+        if avg_loss < best_loss:
+            best_loss = avg_loss
+            checkpoint = {
+                'epoch': epoch,
+                'model_state_dict': vae.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'loss': best_loss,
+            }
+            torch.save(checkpoint, 'vae_best.pt')
+            # Additionally save encoder state separately
+            save_encoder_state(vae, 'encoder_best.pt')
+            print(f"Checkpoint saved at epoch {epoch + 1} with loss {best_loss:.4f}")
 
-    # Evaluation mode
-    if (epoch + 1) % 10 == 0:  # Evaluate every 10 epochs
-        vae.eval()
-        eval_loss = 0
-        eval_recon_loss = 0
-        eval_kl_loss = 0
-        num_eval = 0
-        with torch.no_grad():
-            for batch in motion_dataloader:  # Using same dataloader for simplicity
-                batch = batch.to(device)
-                reconstructed, mu, logvar = vae(batch)
-                loss, recon_loss, kl_loss = vae_loss(reconstructed, batch, mu, logvar, beta=vae.beta)
-                eval_loss += loss.item()
-                eval_recon_loss += recon_loss.item()
-                eval_kl_loss += kl_loss.item()
-                num_eval += 1
-        
-        avg_eval_loss = eval_loss / num_eval
-        avg_eval_recon_loss = eval_recon_loss / num_eval
-        avg_eval_kl_loss = eval_kl_loss / num_eval
-        
-        # Log evaluation metrics
-        writer.add_scalar('Loss/eval', avg_eval_loss, epoch)
-        writer.add_scalar('Loss/eval_reconstruction', avg_eval_recon_loss, epoch)
-        writer.add_scalar('Loss/eval_kl_divergence', avg_eval_kl_loss, epoch)
-        
-        print(f"Evaluation Loss at epoch {epoch + 1}: {avg_eval_loss:.4f}")
+        # Evaluation mode
+        if (epoch + 1) % 10 == 0:  # Evaluate every 10 epochs
+            vae.eval()
+            eval_loss = 0
+            eval_recon_loss = 0
+            eval_kl_loss = 0
+            num_eval = 0
+            with torch.no_grad():
+                for batch in motion_dataloader:  # Using same dataloader for simplicity
+                    batch = batch.to(device)
+                    reconstructed, mu, logvar = vae(batch)
+                    loss, recon_loss, kl_loss = vae_loss(reconstructed, batch, mu, logvar, beta=vae.beta)
+                    eval_loss += loss.item()
+                    eval_recon_loss += recon_loss.item()
+                    eval_kl_loss += kl_loss.item()
+                    num_eval += 1
+            
+            avg_eval_loss = eval_loss / num_eval
+            avg_eval_recon_loss = eval_recon_loss / num_eval
+            avg_eval_kl_loss = eval_kl_loss / num_eval
+            
+            # Log evaluation metrics
+            writer.add_scalar('Loss/eval', avg_eval_loss, epoch)
+            writer.add_scalar('Loss/eval_reconstruction', avg_eval_recon_loss, epoch)
+            writer.add_scalar('Loss/eval_kl_divergence', avg_eval_kl_loss, epoch)
+            
+            print(f"Evaluation Loss at epoch {epoch + 1}: {avg_eval_loss:.4f}")
 
-writer.close()
+    writer.close()
