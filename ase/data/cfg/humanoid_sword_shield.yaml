@@ -8,10 +8,14 @@ env:
   
   pdControl: True
   powerScale: 1.0
-  controlFrequencyInv: 2 # 30 Hz
+  controlFrequencyInv: 2 # changed to 1 for VMP, original is 2, 30 Hz
   stateInit: "Random"
   hybridInitProb: 0.5
-  numAMPObsSteps: 10
+  numAMPObsSteps: 10 # window size from encoder is 64
+
+  # VMP related
+  numVMPWindowHalf: 30 # W in the paper
+  numVMPObsPerStep: 93
 
   localRootObs: False
   keyBodies: ["right_hand", "left_hand", "right_foot", "left_foot", "sword", "shield"]

@@ -1,3 +1,38 @@
+from rl_games.algos_torch import network_builder
+import torch
+import torch.nn as nn
+
+from vmp.train_latent_VAE import VAE_Encoder
+'''
+class VMPBuilder(network_builder.A2CBuilder):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        
+    class Network(network_builder.A2CBuilder.Network):
+        def __init__(self, params, **kwargs):
+            super().__init__(params, **kwargs)
+            
+            # Add your custom network layers here
+            self.custom_layer = nn.Sequential(
+                nn.Linear(params['input_size'], 1024),
+                nn.ReLU(),
+                nn.Linear(1024, 512),
+                nn.ReLU()
+            )
+            
+        def forward(self, obs_dict):
+            # Implement your forward pass
+            obs = obs_dict['obs']
+            x = self.custom_layer(obs)
+            # ... rest of your forward logic
+            return mu, sigma, value, states
+
+    def build(self, name, **kwargs):
+        net = VMPBuilder.Network(self.params, **kwargs)
+        return net
+    
+'''
+
 # Copyright (c) 2018-2022, NVIDIA Corporation
 # All rights reserved.
 #
@@ -209,45 +244,48 @@ class VMPBuilder(amp_network_builder.AMPBuilder):
             critic_out_size = self.critic_mlp.get_out_size()
 
             return actor_out_size, critic_out_size
+        
+        # Example code for loading and using the encoder
+        def _load_vae_encoder(self, path='encoder_best.pt'):
+            checkpoint = torch.load(path)
+            encoder = VAE_Encoder(
+                input_dim=checkpoint['input_dim'],
+                latent_dim=checkpoint['latent_dim']
+            )
+            encoder.load_state_dict(checkpoint['encoder_state_dict'])
+            return encoder
+
+        # # Usage example:
+        # encoder = load_encoder('encoder_best.pt')
+        # encoder.eval()  # Set to evaluation mode
+        # with torch.no_grad():
+        #     mu, logvar = encoder(input_data)  # input_data should be shape [batch_size, feature_dim, window_length]
 
         def _build_enc(self, input_shape):
-            if (self._enc_separate):
-                self._enc_mlp = nn.Sequential()
-                mlp_args = {
-                    'input_size' : input_shape[0], 
-                    'units' : self._enc_units, 
-                    'activation' : self._enc_activation, 
-                    'dense_func' : torch.nn.Linear
-                }
-                self._enc_mlp = self._build_mlp(**mlp_args)
 
-                mlp_init = self.init_factory.create(**self._enc_initializer)
-                for m in self._enc_mlp.modules():
-                    if isinstance(m, nn.Linear):
-                        mlp_init(m.weight)
-                        if getattr(m, "bias", None) is not None:
-                            torch.nn.init.zeros_(m.bias)
-            else:
-                self._enc_mlp = self._disc_mlp
+            # NOTE VAE encoder
+            # self._enc_mlp = self._load_vae_encoder()
+            self._enc_mlp = self._disc_mlp
 
             mlp_out_layer = list(self._enc_mlp.modules())[-2]
             mlp_out_size = mlp_out_layer.out_features
             self._enc = torch.nn.Linear(mlp_out_size, self._ase_latent_shape[-1])
             
-            torch.nn.init.uniform_(self._enc.weight, -ENC_LOGIT_INIT_SCALE, ENC_LOGIT_INIT_SCALE)
+            torch.nn.init.uniform_(self._enc_mlp.weight, -ENC_LOGIT_INIT_SCALE, ENC_LOGIT_INIT_SCALE)
             torch.nn.init.zeros_(self._enc.bias) 
             
             return
 
         def eval_enc(self, amp_obs):
+            print(amp_obs.shape) # torch.Size([num_envs, 1400])
             enc_mlp_out = self._enc_mlp(amp_obs)
-            enc_output = self._enc(enc_mlp_out)
-            enc_output = torch.nn.functional.normalize(enc_output, dim=-1)
-
+            # enc_output = self._enc(enc_mlp_out)
+            enc_output = torch.nn.functional.normalize(enc_mlp_out, dim=-1)
+            # enc_output = torch.nn.functional.normalize(enc_output, dim=-1)
             return enc_output
 
         def sample_latents(self, n):
-            device = next(self._enc.parameters()).device
+            device = next(self._enc_mlp.parameters()).device
             z = torch.normal(torch.zeros([n, self._ase_latent_shape[-1]], device=device))
             z = torch.nn.functional.normalize(z, dim=-1)
             return z

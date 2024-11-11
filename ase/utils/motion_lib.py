@@ -154,6 +154,7 @@ class MotionLib():
         return self._motion_lengths[motion_ids]
 
     def get_motion_state(self, motion_ids, motion_times):
+        '''convert rigid parts motion state to root motion state'''
         n = len(motion_ids)
         num_bodies = self._get_num_bodies()
         num_key_bodies = self._key_body_ids.shape[0]
@@ -294,7 +295,12 @@ class MotionLib():
         return motion_files, motion_weights
 
     def _calc_frame_blend(self, time, len, num_frames, dt):
-
+        '''
+        time: time in seconds
+        len: motion length in seconds
+        num_frames: number of frames in the motion
+        dt: frame time in seconds
+        '''
         phase = time / len
         phase = torch.clip(phase, 0.0, 1.0)
 

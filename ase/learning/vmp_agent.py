@@ -85,8 +85,10 @@ class VMPAgent(amp_agent.AMPAgent):
 
             if self.has_central_value:
                 self.experience_buffer.update_data('states', n, self.obs['states'])
+            # NOTE this is where we get the amp_obs
 
             self.obs, rewards, self.dones, infos = self.env_step(res_dict['actions'])
+            # print("Average reward:", torch.mean(rewards).item())
             shaped_rewards = self.rewards_shaper(rewards)
             self.experience_buffer.update_data('rewards', n, shaped_rewards)
             self.experience_buffer.update_data('next_obses', n, self.obs['obs'])
@@ -125,8 +127,11 @@ class VMPAgent(amp_agent.AMPAgent):
         mb_next_values = self.experience_buffer.tensor_dict['next_values']
         
         mb_rewards = self.experience_buffer.tensor_dict['rewards']
-        mb_amp_obs = self.experience_buffer.tensor_dict['amp_obs']
-        mb_ase_latents = self.experience_buffer.tensor_dict['ase_latents']
+        mb_amp_obs = self.experience_buffer.tensor_dict['amp_obs'] # horizon, num_envs, 1400
+        mb_ase_latents = self.experience_buffer.tensor_dict['ase_latents'] # horizon, num_envs, 64
+
+        # print(mb_amp_obs.shape,mb_ase_latents.shape)
+
         amp_rewards = self._calc_amp_rewards(mb_amp_obs, mb_ase_latents)
         mb_rewards = self._combine_rewards(mb_rewards, amp_rewards)
         
@@ -552,17 +557,21 @@ class VMPAgent(amp_agent.AMPAgent):
 
     def _amp_debug(self, info, ase_latents):
         with torch.no_grad():
-            pass
-            # amp_obs = info['amp_obs']
-            # amp_obs = amp_obs
-            # ase_latents = ase_latents
-            # disc_pred = self._eval_disc(amp_obs)
-            # amp_rewards = self._calc_amp_rewards(amp_obs, ase_latents)
-            # disc_reward = amp_rewards['disc_rewards']
-            # enc_reward = amp_rewards['enc_rewards']
+            # pass
+            amp_obs = info['amp_obs']
+            amp_obs = amp_obs
+            ase_latents = ase_latents
+            disc_pred = self._eval_disc(amp_obs)
 
-            # disc_pred = disc_pred.detach().cpu().numpy()[0, 0]
-            # disc_reward = disc_reward.cpu().numpy()[0, 0]
-            # enc_reward = enc_reward.cpu().numpy()[0, 0]
-            # print("disc_pred: ", disc_pred, disc_reward, enc_reward)
+            # TODO debug 
+            # RuntimeError: Given groups=1, weight of size [64, 93, 3], expected input[1, 256, 1400] to have 93 channels, but got 256 channels instead
+            amp_rewards = self._calc_amp_rewards(amp_obs, ase_latents)
+            disc_reward = amp_rewards['disc_rewards']
+            enc_reward = amp_rewards['enc_rewards']
+
+            disc_pred = disc_pred.detach().cpu().numpy()[0, 0]
+            disc_reward = disc_reward.cpu().numpy()[0, 0]
+            enc_reward = enc_reward.cpu().numpy()[0, 0]
+            print("disc_pred: ", disc_pred, disc_reward, enc_reward)
+            # print("disc_pred: ",disc_pred)
         return

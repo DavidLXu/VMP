@@ -119,7 +119,7 @@ class VecTaskGPU(VecTask):
 
 # Python CPU/GPU Class
 class VecTaskPython(VecTask):
-
+    # NOTE get here
     def get_state(self):
         return torch.clamp(self.task.states_buf, -self.clip_obs, self.clip_obs).to(self.rl_device)
 
