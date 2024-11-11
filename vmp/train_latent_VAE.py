@@ -9,12 +9,12 @@ from torch.utils.tensorboard import SummaryWriter
 
 # Define Residual Block for deeper feature extraction
 class ResBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3):
+    def __init__(self, in_channels, out_channels, kernel_size=3, window_length=61):
         super(ResBlock, self).__init__()
         self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size, padding=1, bias=False)
         self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size, padding=1, bias=False)
-        self.norm1 = nn.LayerNorm([out_channels, 30])
-        self.norm2 = nn.LayerNorm([out_channels, 30])
+        self.norm1 = nn.LayerNorm([out_channels, window_length])
+        self.norm2 = nn.LayerNorm([out_channels, window_length])
         self.activation = nn.ReLU()
 
     def forward(self, x):
@@ -25,22 +25,25 @@ class ResBlock(nn.Module):
 
 # Encoder
 class VAE_Encoder(nn.Module):
-    def __init__(self, input_dim, latent_dim):
+    def __init__(self, input_dim, latent_dim, window_length):
         super(VAE_Encoder, self).__init__()
         # Initial conv layer without bias
         self.conv1 = nn.Conv1d(input_dim, 64, kernel_size=3, stride=1, padding=1, bias=False)
         
         # 4 ConvResNet blocks
-        self.res_block1 = ResBlock(64, 64)
-        self.res_block2 = ResBlock(64, 64) 
-        self.res_block3 = ResBlock(64, 64)
-        self.res_block4 = ResBlock(64, 64)
+        self.res_block1 = ResBlock(64, 64, window_length=window_length)
+        self.res_block2 = ResBlock(64, 64, window_length=window_length) 
+        self.res_block3 = ResBlock(64, 64, window_length=window_length)
+        self.res_block4 = ResBlock(64, 64, window_length=window_length)
         
         # Layer normalization
         self.norm = nn.LayerNorm(64)
         
-        # Final linear layers for VAE
-        self.fc_mu = nn.Linear(64, latent_dim)
+        # Add global average pooling before final linear layers
+        self.global_pool = nn.AdaptiveAvgPool1d(1)
+        
+        # Modify final linear layers to take flattened input
+        self.fc_mu = nn.Linear(64, latent_dim)  # Now takes pooled features
         self.fc_logvar = nn.Linear(64, latent_dim)
         
     def forward(self, x):
@@ -57,16 +60,21 @@ class VAE_Encoder(nn.Module):
         x = self.norm(x.transpose(1,2)).transpose(1,2)
         x = F.relu(x)
         
-        # Get latent parameters per timestep
-        mu = self.fc_mu(x.transpose(1,2))
-        logvar = self.fc_logvar(x.transpose(1,2))
+        # Global average pooling
+        x = self.global_pool(x)  # Output shape: (batch_size, 64, 1)
+        x = x.squeeze(-1)  # Output shape: (batch_size, 64)
+        
+        # Get single latent vector per sequence
+        mu = self.fc_mu(x)  # Output shape: (batch_size, latent_dim)
+        logvar = self.fc_logvar(x)  # Output shape: (batch_size, latent_dim)
         return mu, logvar
 
 # Decoder
 class VAE_Decoder(nn.Module):
-    def __init__(self, latent_dim, output_dim):
+    def __init__(self, latent_dim, output_dim, window_length=61):
         super(VAE_Decoder, self).__init__()
-        self.fc = nn.Linear(latent_dim, 64)
+        self.window_length = window_length
+        self.fc = nn.Linear(latent_dim, 64 * window_length)  # Expand latent to full sequence length
         
         # 4 ConvResNet blocks
         self.res_block1 = ResBlock(64, 64)
@@ -81,8 +89,9 @@ class VAE_Decoder(nn.Module):
         self.conv = nn.Conv1d(64, output_dim, kernel_size=3, stride=1, padding=1, bias=False)
         
     def forward(self, z):
-        x = F.relu(self.fc(z))
-        x = x.transpose(1,2)
+        # Reshape to sequence
+        x = F.relu(self.fc(z))  # Output: (batch_size, 64 * window_length)
+        x = x.view(x.size(0), 64, self.window_length)  # Reshape to (batch_size, 64, window_length)
         
         # Pass through ResNet blocks
         x = self.res_block1(x)
@@ -100,10 +109,10 @@ class VAE_Decoder(nn.Module):
 
 # VAE Class combining Encoder and Decoder
 class VAE(nn.Module):
-    def __init__(self, input_dim, latent_dim=64):
+    def __init__(self, input_dim, latent_dim=64, window_length=61):
         super(VAE, self).__init__()
-        self.encoder = VAE_Encoder(input_dim, latent_dim)
-        self.decoder = VAE_Decoder(latent_dim, input_dim)
+        self.encoder = VAE_Encoder(input_dim, latent_dim, window_length)
+        self.decoder = VAE_Decoder(latent_dim, input_dim, window_length)  # Pass window_length to decoder
         self.beta = 0.002  # KL weight for beta-VAE
 
     def reparameterize(self, mu, logvar):
@@ -127,11 +136,12 @@ def vae_loss(reconstructed, original, mu, logvar, beta=0.002):
     kl_divergence = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
     return recon_loss + beta * kl_divergence, recon_loss, kl_divergence
 
-def save_encoder_state(vae, path='encoder_only.pt'):
+def save_encoder_state(vae, window_length=61, path='encoder_only.pt'):
     encoder_state = {
         'encoder_state_dict': vae.encoder.state_dict(),
         'input_dim': vae.encoder.conv1.in_channels,
-        'latent_dim': vae.encoder.fc_mu.out_features
+        'latent_dim': vae.encoder.fc_mu.out_features,
+        'window_length': window_length
     }
     torch.save(encoder_state, path)
     print(f"Encoder state saved to {path}")
@@ -141,15 +151,17 @@ if __name__ == "__main__":
     motion_combo = "/data/ASE/ase/data/motions/walk/dataset_reallusion_walk.yaml"
     motion_clip = "/data/ASE/ase/data/motions/walk/RL_Avatar_WalkForward01_Motion.npy"
 
+    W = 30
+    window_length = 2 * W + 1
     motion_dataset = MotionDataset(motion_file=motion_combo,
-                            num_motions=100000,
-                            window_length=30)  # 1 second window
+                            num_motions=1000,
+                            window_length=window_length)  # 1 second window
 
     motion_dataloader = DataLoader(motion_dataset, batch_size=512, shuffle=True)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    vae = VAE(input_dim=93).to(device)  # input_dim is feature_dim since we transpose
+    vae = VAE(input_dim=93, window_length=window_length).to(device)  # input_dim is feature_dim since we transpose
 
     # Print total number of parameters
     total_params = sum(p.numel() for p in vae.parameters())
@@ -175,6 +187,7 @@ if __name__ == "__main__":
             optimizer.zero_grad()
             
             reconstructed, mu, logvar = vae(batch)
+            print(batch.shape, mu.shape)
             loss, recon_loss, kl_loss = vae_loss(reconstructed, batch, mu, logvar, beta=vae.beta)
             
             if torch.isnan(loss):
@@ -218,7 +231,7 @@ if __name__ == "__main__":
             }
             torch.save(checkpoint, 'vae_best.pt')
             # Additionally save encoder state separately
-            save_encoder_state(vae, 'encoder_best.pt')
+            save_encoder_state(vae, window_length=window_length, path='encoder_best.pt')
             print(f"Checkpoint saved at epoch {epoch + 1} with loss {best_loss:.4f}")
 
         # Evaluation mode

@@ -37,6 +37,9 @@ import enum
 
 from learning import amp_network_builder
 
+
+from vmp.train_latent_VAE import VAE_Encoder
+
 ENC_LOGIT_INIT_SCALE = 0.1
 
 class LatentType(enum.Enum):
@@ -128,30 +131,31 @@ class VMPBuilder(amp_network_builder.AMPBuilder):
             return
 
         def forward(self, obs_dict):
+            
             obs = obs_dict['obs']
-            ase_latents = obs_dict['ase_latents']
+            vmp_latents = obs_dict['vmp_latents']
             states = obs_dict.get('rnn_states', None)
             use_hidden_latents = obs_dict.get('use_hidden_latents', False)
 
-            actor_outputs = self.eval_actor(obs, ase_latents, use_hidden_latents)
-            value = self.eval_critic(obs, ase_latents, use_hidden_latents)
+            actor_outputs = self.eval_actor(obs, vmp_latents, use_hidden_latents)
+            value = self.eval_critic(obs, vmp_latents, use_hidden_latents)
 
             output = actor_outputs + (value, states)
 
             return output
 
-        def eval_critic(self, obs, ase_latents, use_hidden_latents=False):
+        def eval_critic(self, obs, vmp_latents, use_hidden_latents=False):
             c_out = self.critic_cnn(obs)
             c_out = c_out.contiguous().view(c_out.size(0), -1)
             
-            c_out = self.critic_mlp(c_out, ase_latents, use_hidden_latents)
+            c_out = self.critic_mlp(c_out, vmp_latents, use_hidden_latents)
             value = self.value_act(self.value(c_out))
             return value
 
-        def eval_actor(self, obs, ase_latents, use_hidden_latents=False):
+        def eval_actor(self, obs, vmp_latents, use_hidden_latents=False):
             a_out = self.actor_cnn(obs)
             a_out = a_out.contiguous().view(a_out.size(0), -1)
-            a_out = self.actor_mlp(a_out, ase_latents, use_hidden_latents)
+            a_out = self.actor_mlp(a_out, vmp_latents, use_hidden_latents)
                      
             if self.is_discrete:
                 logits = self.logits(a_out)
@@ -170,6 +174,39 @@ class VMPBuilder(amp_network_builder.AMPBuilder):
 
                 return mu, sigma
             return
+
+        def _load_vmp_encoder(self, path='encoder_best.pt'):
+            checkpoint = torch.load(path)
+            encoder = VAE_Encoder(
+                input_dim=checkpoint['input_dim'],
+                latent_dim=checkpoint['latent_dim'],
+                window_length=checkpoint['window_length']
+            )
+            encoder.load_state_dict(checkpoint['encoder_state_dict'])
+            return encoder    
+        
+        def reparameterize(self, mu, logvar):
+            std = torch.exp(0.5 * logvar)
+            eps = torch.randn_like(std)
+            return mu + eps * std
+        
+        def get_vmp_latents(self, obs_window):
+            obs_window = obs_window.transpose(1, 2)
+            
+            # Load encoder and move it to the correct device
+            self._vmp_encoder = self._load_vmp_encoder()
+            device = obs_window.device  # Get device from input tensor
+            self._vmp_encoder = self._vmp_encoder.to(device)  # Move encoder to same device
+            
+            mu, logvar = self._vmp_encoder(obs_window)
+
+            # NOTE logvar is a bit large for the data, so we use deterministic sampling
+            deterministic = True
+            if deterministic:
+                vmp_latents = mu
+            else:
+                vmp_latents = self.reparameterize(mu, logvar)
+            return vmp_latents
 
         def get_enc_weights(self):
             weights = []
@@ -334,6 +371,7 @@ class AMPStyleCatNet1(torch.nn.Module):
         if (skip_style):
             style = latent
         else:
+            # NOTE skip_style = False for VMP, because use_hidden_latents = False
             style = self.eval_style(latent)
 
         h = torch.cat([obs, style], dim=-1)

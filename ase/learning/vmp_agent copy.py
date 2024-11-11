@@ -46,17 +46,17 @@ class VMPAgent(amp_agent.AMPAgent):
         super().init_tensors()
         
         batch_shape = self.experience_buffer.obs_base_shape
-        self.experience_buffer.tensor_dict['vmp_latents'] = torch.zeros(batch_shape + (self._latent_dim,),
+        self.experience_buffer.tensor_dict['ase_latents'] = torch.zeros(batch_shape + (self._latent_dim,),
                                                                 dtype=torch.float32, device=self.ppo_device)
         
-        self._vmp_latents = torch.zeros((batch_shape[-1], self._latent_dim), dtype=torch.float32,
+        self._ase_latents = torch.zeros((batch_shape[-1], self._latent_dim), dtype=torch.float32,
                                          device=self.ppo_device)
         
         self._vmp_latents = torch.zeros((batch_shape[-1], self._latent_dim,), dtype=torch.float32,
                                          device=self.ppo_device)
         # print("self._vmp_latents", self._vmp_latents.shape)
 
-        self.tensor_list += ['vmp_latents', 'vmp_latents']
+        self.tensor_list += ['ase_latents', 'vmp_latents']
 
         self._latent_reset_steps = torch.zeros(batch_shape[-1], dtype=torch.int32, device=self.ppo_device)
         num_envs = self.vec_env.env.task.num_envs
@@ -84,11 +84,11 @@ class VMPAgent(amp_agent.AMPAgent):
 
             if self.use_action_masks:
                 masks = self.vec_env.get_action_masks()
-                res_dict = self.get_masked_action_values(self.obs, self._vmp_latents, masks)
+                res_dict = self.get_masked_action_values(self.obs, self._ase_latents, masks)
             else:
-                # print(self._vmp_latents.shape, self._vmp_latents.shape)
+                # print(self._ase_latents.shape, self._vmp_latents.shape)
                 # exit()
-                # res_dict = self.get_action_values(self.obs, self._vmp_latents, self._rand_action_probs)
+                # res_dict = self.get_action_values(self.obs, self._ase_latents, self._rand_action_probs)
                 res_dict = self.get_action_values(self.obs, self._vmp_latents, self._rand_action_probs)
             for k in update_list:
                 self.experience_buffer.update_data(k, n, res_dict[k]) 
@@ -104,18 +104,18 @@ class VMPAgent(amp_agent.AMPAgent):
             self.experience_buffer.update_data('next_obses', n, self.obs['obs'])
             self.experience_buffer.update_data('dones', n, self.dones)
             self.experience_buffer.update_data('amp_obs', n, infos['amp_obs'])
-            self.experience_buffer.update_data('vmp_latents', n, self._vmp_latents)
+            self.experience_buffer.update_data('ase_latents', n, self._ase_latents)
             self.experience_buffer.update_data('rand_action_mask', n, res_dict['rand_action_mask'])
 
             self._vmp_obs = infos['vmp_obs']
             self._vmp_obs_window = infos['vmp_obs_window']
             self._vmp_latents = self.model.a2c_network.get_vmp_latents(self._vmp_obs_window)
 
-            # print(self._vmp_latents.shape, self._vmp_latents.shape)
+            # print(self._ase_latents.shape, self._vmp_latents.shape)
 
             terminated = infos['terminate'].float()
             terminated = terminated.unsqueeze(-1)
-            next_vals = self._eval_critic(self.obs, self._vmp_latents)
+            next_vals = self._eval_critic(self.obs, self._ase_latents)
             next_vals *= (1.0 - terminated)
             self.experience_buffer.update_data('next_values', n, next_vals)
 
@@ -134,7 +134,7 @@ class VMPAgent(amp_agent.AMPAgent):
             self.current_lengths = self.current_lengths * not_dones
         
             if (self.vec_env.env.task.viewer):
-                self._amp_debug(infos, self._vmp_latents)
+                self._amp_debug(infos, self._ase_latents)
 
             done_indices = done_indices[:, 0]
 
@@ -144,11 +144,11 @@ class VMPAgent(amp_agent.AMPAgent):
         
         mb_rewards = self.experience_buffer.tensor_dict['rewards']
         mb_amp_obs = self.experience_buffer.tensor_dict['amp_obs'] # horizon, num_envs, 1400
-        mb_vmp_latents = self.experience_buffer.tensor_dict['vmp_latents'] # horizon, num_envs, 64
+        mb_ase_latents = self.experience_buffer.tensor_dict['ase_latents'] # horizon, num_envs, 64
 
-        # print(mb_amp_obs.shape,mb_vmp_latents.shape)
+        # print(mb_amp_obs.shape,mb_ase_latents.shape)
 
-        amp_rewards = self._calc_amp_rewards(mb_amp_obs, mb_vmp_latents)
+        amp_rewards = self._calc_amp_rewards(mb_amp_obs, mb_ase_latents)
         mb_rewards = self._combine_rewards(mb_rewards, amp_rewards)
         
         mb_advs = self.discount_values(mb_fdones, mb_values, mb_rewards, mb_next_values)
@@ -163,7 +163,7 @@ class VMPAgent(amp_agent.AMPAgent):
 
         return batch_dict
 
-    def get_action_values(self, obs_dict, vmp_latents, rand_action_probs):
+    def get_action_values(self, obs_dict, ase_latents, rand_action_probs):
         processed_obs = self._preproc_obs(obs_dict['obs'])
 
         self.model.eval()
@@ -172,7 +172,7 @@ class VMPAgent(amp_agent.AMPAgent):
             'prev_actions': None, 
             'obs' : processed_obs,
             'rnn_states' : self.rnn_states,
-            'vmp_latents': vmp_latents
+            'ase_latents': ase_latents
         }
 
         with torch.no_grad():
@@ -199,8 +199,8 @@ class VMPAgent(amp_agent.AMPAgent):
     def prepare_dataset(self, batch_dict):
         super().prepare_dataset(batch_dict)
         
-        vmp_latents = batch_dict['vmp_latents']
-        self.dataset.values_dict['vmp_latents'] = vmp_latents
+        ase_latents = batch_dict['ase_latents']
+        self.dataset.values_dict['ase_latents'] = ase_latents
         
         return
 
@@ -230,7 +230,7 @@ class VMPAgent(amp_agent.AMPAgent):
         amp_obs_demo = self._preproc_amp_obs(amp_obs_demo)
         amp_obs_demo.requires_grad_(True)
 
-        vmp_latents = input_dict['vmp_latents']
+        ase_latents = input_dict['ase_latents']
         
         rand_action_mask = input_dict['rand_action_mask']
         rand_action_sum = torch.sum(rand_action_mask)
@@ -247,7 +247,7 @@ class VMPAgent(amp_agent.AMPAgent):
             'amp_obs' : amp_obs,
             'amp_obs_replay' : amp_obs_replay,
             'amp_obs_demo' : amp_obs_demo,
-            'vmp_latents': vmp_latents
+            'ase_latents': ase_latents
         }
 
         rnn_masks = None
@@ -294,7 +294,7 @@ class VMPAgent(amp_agent.AMPAgent):
             disc_loss = disc_info['disc_loss']
             
             # NOTE this is why amp_minibatch_size should be smaller than minibatch_size assert(self._amp_minibatch_size <= self.minibatch_size)
-            enc_latents = batch_dict['vmp_latents'][0:self._amp_minibatch_size]
+            enc_latents = batch_dict['ase_latents'][0:self._amp_minibatch_size]
         
             enc_loss_mask = rand_action_mask[0:self._amp_minibatch_size]
             enc_info = self._enc_loss(enc_pred, enc_latents, batch_dict['amp_obs'], enc_loss_mask)
@@ -304,7 +304,7 @@ class VMPAgent(amp_agent.AMPAgent):
                  + self._disc_coef * disc_loss + self._enc_coef * enc_loss
             
             if (self._enable_amp_diversity_bonus()):
-                diversity_loss = self._diversity_loss(batch_dict['obs'], mu, batch_dict['vmp_latents'])
+                diversity_loss = self._diversity_loss(batch_dict['obs'], mu, batch_dict['ase_latents'])
                 diversity_loss = torch.sum(rand_action_mask * diversity_loss) / rand_action_sum
                 loss += self._amp_diversity_bonus * diversity_loss
                 a_info['amp_diversity_loss'] = diversity_loss
@@ -403,7 +403,7 @@ class VMPAgent(amp_agent.AMPAgent):
     def _reset_latents(self, env_ids):
         n = len(env_ids)
         z = self._sample_latents(n)
-        self._vmp_latents[env_ids] = z
+        self._ase_latents[env_ids] = z
 
         if (self.vec_env.env.task.viewer):
             self._change_char_color(env_ids)
@@ -430,37 +430,37 @@ class VMPAgent(amp_agent.AMPAgent):
 
         return
 
-    def _eval_actor(self, obs, vmp_latents):
+    def _eval_actor(self, obs, ase_latents):
         '''
         self.model.a2c_network.eval_actor here 
         is the same as eval_actor in the network builder
         '''
-        output = self.model.a2c_network.eval_actor(obs=obs, vmp_latents=vmp_latents)
+        output = self.model.a2c_network.eval_actor(obs=obs, ase_latents=ase_latents)
         return output
 
-    def _eval_critic(self, obs_dict, vmp_latents):
+    def _eval_critic(self, obs_dict, ase_latents):
         self.model.eval()
         obs = obs_dict['obs']
         processed_obs = self._preproc_obs(obs)
-        value = self.model.a2c_network.eval_critic(processed_obs, vmp_latents)
+        value = self.model.a2c_network.eval_critic(processed_obs, ase_latents)
 
         if self.normalize_value:
             value = self.value_mean_std(value, True)
         return value
 
-    def _calc_amp_rewards(self, amp_obs, vmp_latents):
+    def _calc_amp_rewards(self, amp_obs, ase_latents):
         disc_r = self._calc_disc_rewards(amp_obs)
-        enc_r = self._calc_enc_rewards(amp_obs, vmp_latents)
+        enc_r = self._calc_enc_rewards(amp_obs, ase_latents)
         output = {
             'disc_rewards': disc_r,
             'enc_rewards': enc_r
         }
         return output
 
-    def _calc_enc_rewards(self, amp_obs, vmp_latents):
+    def _calc_enc_rewards(self, amp_obs, ase_latents):
         with torch.no_grad():
             enc_pred = self._eval_enc(amp_obs)
-            err = self._calc_enc_error(enc_pred, vmp_latents)
+            err = self._calc_enc_error(enc_pred, ase_latents)
             enc_r = torch.clamp_min(-err, 0.0)
             enc_r *= self._enc_reward_scale
 
@@ -498,14 +498,14 @@ class VMPAgent(amp_agent.AMPAgent):
 
         return enc_info
 
-    def _diversity_loss(self, obs, action_params, vmp_latents):
+    def _diversity_loss(self, obs, action_params, ase_latents):
         assert(self.model.a2c_network.is_continuous)
 
         n = obs.shape[0]
         assert(n == action_params.shape[0])
 
         new_z = self._sample_latents(n)
-        mu, sigma = self._eval_actor(obs=obs, vmp_latents=new_z)
+        mu, sigma = self._eval_actor(obs=obs, ase_latents=new_z)
 
         clipped_action_params = torch.clamp(action_params, -1.0, 1.0)
         clipped_mu = torch.clamp(mu, -1.0, 1.0)
@@ -513,7 +513,7 @@ class VMPAgent(amp_agent.AMPAgent):
         a_diff = clipped_action_params - clipped_mu
         a_diff = torch.mean(torch.square(a_diff), dim=-1)
 
-        z_diff = new_z * vmp_latents
+        z_diff = new_z * ase_latents
         z_diff = torch.sum(z_diff, dim=-1)
         z_diff = 0.5 - 0.5 * z_diff
 
@@ -578,17 +578,17 @@ class VMPAgent(amp_agent.AMPAgent):
         self.vec_env.env.task.set_char_color(rand_col, env_ids)
         return
 
-    def _amp_debug(self, info, vmp_latents):
+    def _amp_debug(self, info, ase_latents):
         with torch.no_grad():
             # pass
             amp_obs = info['amp_obs']
             amp_obs = amp_obs
-            vmp_latents = vmp_latents
+            ase_latents = ase_latents
             disc_pred = self._eval_disc(amp_obs)
 
             # TODO debug 
             # RuntimeError: Given groups=1, weight of size [64, 93, 3], expected input[1, 256, 1400] to have 93 channels, but got 256 channels instead
-            amp_rewards = self._calc_amp_rewards(amp_obs, vmp_latents)
+            amp_rewards = self._calc_amp_rewards(amp_obs, ase_latents)
             disc_reward = amp_rewards['disc_rewards']
             enc_reward = amp_rewards['enc_rewards']
 

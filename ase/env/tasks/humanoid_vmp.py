@@ -79,6 +79,7 @@ class HumanoidVMP(Humanoid):
         self._hist_amp_obs_buf = self._amp_obs_buf[:, 1:] # torch.Size([128, 9, 140])
 
         self._amp_obs_demo_buf = None
+        self._vmp_obs_demo_buf = None
 
         return
 
@@ -96,8 +97,11 @@ class HumanoidVMP(Humanoid):
         self.extras["amp_obs"] = amp_obs_flat
 
         # vmp condition = m_t,z_t
-        # self.extras["vmp_cond"] = amp_obs_flat 
+        vmp_obs_t = self.get_vmp_obs() # num_envs, 93
+        self.extras["vmp_obs"] = vmp_obs_t
 
+        self.extras["vmp_obs_window"] = self.fetch_vmp_obs_demo()  # better with num_envs, 2W+1, 93
+        # print(self.extras["vmp_obs_window"])
         return
 
     def get_num_amp_obs(self):
@@ -179,10 +183,8 @@ class HumanoidVMP(Humanoid):
         self._vmp_obs_demo_buf_motion_times0 = motion_times0
 
         vmp_obs_demo = self.build_vmp_obs_demo(motion_ids, motion_times0)
-        self._vmp_obs_demo_buf[:] = vmp_obs_demo.view(self._vmp_obs_demo_buf.shape)
-        vmp_obs_demo_flat = self._vmp_obs_demo_buf.view(-1, self.get_num_vmp_obs())
 
-        return vmp_obs_demo_flat
+        return vmp_obs_demo
 
     def build_vmp_obs_demo(self, motion_ids, motion_times0):
         # not used in --test mode (called by amp_agent in training)
@@ -198,19 +200,27 @@ class HumanoidVMP(Humanoid):
         motion_times = motion_times + time_steps
 
         motion_ids = motion_ids.view(-1)
+
+        # print("motion_times", motion_times.shape)
         motion_times = motion_times.view(-1)
-        # print(motion_ids.shape, motion_times.shape)
+        # print("motion_times", motion_times.shape)
+
         
         root_pos, root_rot, dof_pos, root_vel, root_ang_vel, dof_vel, key_pos \
                = self._motion_lib.get_motion_state(motion_ids, motion_times)
 
         # Build VMP observations for each timestep
+        # [31232, 1] [31232, 6] [31232, 6] [31232, 31] [31232, 31] [31232, 18]
+        # vmp_obs_demo torch.Size([512, 61, 93])
+
+        
         vmp_obs_demo = build_vmp_observations(root_pos, root_rot, root_vel, root_ang_vel,
                                             dof_pos, dof_vel, key_pos,
-                                            self._local_root_obs, self._root_height_obs,
-                                            self._dof_obs_size, self._dof_offsets)
-        
-        return vmp_obs_demo
+                                            )
+
+        return vmp_obs_demo.view(self.num_envs, 
+                                                self._num_vmp_obs_steps, 
+                                                self._num_vmp_obs_per_step)
 
     def _build_vmp_obs_demo_buf(self, num_envs):
         # Buffer shape remains the same, but now represents [-W, ..., 0, ..., W] timesteps
@@ -441,6 +451,38 @@ class HumanoidVMP(Humanoid):
         
         return m_t_hat
     
+    def get_vmp_obs(self):
+        '''
+        similar to get_m_t_hat, but with concatenated features
+        '''
+        # h, height of the character’s root relative to the ground
+        h_t_hat = self._humanoid_root_states[:, 2]
+        # theta, orientation of the root, expressed as a 6D vector
+        rot_mat_hat = compute_rotation_matrix_from_quaternion(self._humanoid_root_states[:, 3:7])
+        theta_t_hat = self.rot_to_6d(rot_mat_hat)
+        # v, linear and angular velocity of the root, expressed as a 6D vector
+        
+        # TODO: verify idx 0 is indeed the root motion in the calculated motion reference
+        v_t_hat = torch.cat([self._rigid_body_vel[:, 0, :], self._rigid_body_ang_vel[:, 0, :]], dim=-1)
+        
+        # q, joint angles, expressed as a 31D vector
+        q_t_hat = self._dof_pos
+        # dq, joint velocities, expressed as a 31D vector
+        dq_t_hat = self._dof_vel
+        # p, of hands and feet, relative to the root, in the features for frame t.
+        p_t_hat = self._rigid_body_pos[:, self._key_body_ids, :]
+        p_t_flat_hat = p_t_hat.reshape(p_t_hat.shape[0], -1) # from [batch, 6, 3] to [batch, 18] 
+        
+        m_t_hat = torch.cat([
+            h_t_hat.unsqueeze(-1),     # [batch, 1]
+            theta_t_hat,                # [batch, 6]
+            v_t_hat,                    # [batch, 6] 
+            q_t_hat,                    # [batch, 31]
+            dq_t_hat,                   # [batch, 31]
+            p_t_flat_hat                # [batch, 18]
+        ], dim=-1)
+        return m_t_hat
+    
     def get_m_t_ref(self, motion_ids, motion_times):
         '''
         Get reference motion state for given motion_ids and times
@@ -491,7 +533,7 @@ class HumanoidVMP(Humanoid):
         
         # print(m_t_hat["q_t"].shape, m_t_ref["q_t"].shape)
         self.rew_buf[:] = \
-            self.compute_vmp_reward(m_t_hat, m_t_ref)
+             self.compute_vmp_reward(m_t_hat, m_t_ref)
         return
     
     # TODO move to jit later
@@ -538,7 +580,6 @@ def build_amp_observations(root_pos, root_rot, root_vel, root_ang_vel, dof_pos, 
     # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, bool, bool, int, List[int]) -> Tensor
     root_h = root_pos[:, 2:3]
     heading_rot = torch_utils.calc_heading_quat_inv(root_rot)
-
     if (local_root_obs):
         root_rot_obs = quat_mul(heading_rot, root_rot)
     else:
@@ -610,8 +651,8 @@ def compute_rotation_matrix_from_quaternion(quaternion):
 
 @torch.jit.script
 def build_vmp_observations(root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, key_body_pos, 
-                         local_root_obs, root_height_obs, dof_obs_size, dof_offsets):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, bool, bool, int, List[int]) -> Tensor
+                         ):
+    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor,) -> Tensor
     """
     Builds VMP observations following the paper's structure:
     - h_t: height of character's root relative to ground
@@ -626,27 +667,19 @@ def build_vmp_observations(root_pos, root_rot, root_vel, root_ang_vel, dof_pos, 
     h_t = root_pos[:, 2:3]
     
     # theta_t: root orientation (6D)
-    heading_rot = torch_utils.calc_heading_quat_inv(root_rot)
-    if local_root_obs:
-        root_rot_obs = quat_mul(heading_rot, root_rot)
-    else:
-        root_rot_obs = root_rot
-    
+    heading_rot = torch_utils.calc_heading_quat_inv(root_rot)    
     # Convert quaternion to 6D rotation representation
-    rot_mat = compute_rotation_matrix_from_quaternion(root_rot_obs)
+    rot_mat = compute_rotation_matrix_from_quaternion(root_rot)
     theta_t = torch.cat([rot_mat[..., :3, 0], rot_mat[..., :3, 1]], dim=-1)
     
     # v_t: root velocities (6D)
-    if local_root_obs:
-        v_linear = quat_rotate(heading_rot, root_vel)
-        v_angular = quat_rotate(heading_rot, root_ang_vel)
-    else:
-        v_linear = root_vel
-        v_angular = root_ang_vel
+
+    v_linear = root_vel
+    v_angular = root_ang_vel
     v_t = torch.cat([v_linear, v_angular], dim=-1)
     
     # q_t: joint angles
-    q_t = dof_to_obs(dof_pos, dof_obs_size, dof_offsets)
+    q_t = dof_pos
     
     # dq_t: joint velocities
     dq_t = dof_vel
@@ -654,17 +687,14 @@ def build_vmp_observations(root_pos, root_rot, root_vel, root_ang_vel, dof_pos, 
     # p_t: end-effector positions relative to root
     root_pos_expand = root_pos.unsqueeze(-2)
     local_key_body_pos = key_body_pos - root_pos_expand
-    
-    if local_root_obs:
-        heading_rot_expand = heading_rot.unsqueeze(-2)
-        heading_rot_expand = heading_rot_expand.repeat((1, local_key_body_pos.shape[1], 1))
-        flat_end_pos = local_key_body_pos.view(local_key_body_pos.shape[0] * local_key_body_pos.shape[1], local_key_body_pos.shape[2])
-        flat_heading_rot = heading_rot_expand.view(heading_rot_expand.shape[0] * heading_rot_expand.shape[1], 
-                                                heading_rot_expand.shape[2])
-        local_end_pos = quat_rotate(flat_heading_rot, flat_end_pos)
-        p_t = local_end_pos.view(local_key_body_pos.shape[0], -1)
-    else:
-        p_t = local_key_body_pos.view(local_key_body_pos.shape[0], -1)
+    heading_rot_expand = heading_rot.unsqueeze(-2)
+    heading_rot_expand = heading_rot_expand.repeat((1, local_key_body_pos.shape[1], 1))
+    flat_end_pos = local_key_body_pos.view(local_key_body_pos.shape[0] * local_key_body_pos.shape[1], local_key_body_pos.shape[2])
+    flat_heading_rot = heading_rot_expand.view(heading_rot_expand.shape[0] * heading_rot_expand.shape[1], 
+                                            heading_rot_expand.shape[2])
+    local_end_pos = quat_rotate(flat_heading_rot, flat_end_pos)
+    p_t = local_end_pos.view(local_key_body_pos.shape[0], -1)
+
     
     # Concatenate all features
     obs = torch.cat([
@@ -675,5 +705,5 @@ def build_vmp_observations(root_pos, root_rot, root_vel, root_ang_vel, dof_pos, 
         dq_t,       # [batch, num_dof]
         p_t         # [batch, num_key_bodies * 3]
     ], dim=-1)
-    
+
     return obs
