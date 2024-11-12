@@ -33,7 +33,7 @@ See [train_latent_VAE.py](https://github.com/DavidLXu/VMP/blob/main/vmp/train_la
 ### Motion frames and sliding windows
 Refer to [humanoid_vmp.py](https://github.com/DavidLXu/VMP/blob/main/ase/env/tasks/humanoid_vmp.py)
 
-`self.get_vmp_obs()` is used to construct motion frame $m_t = \{ h_t, \theta_t, v_t, q_t, \dot{q}_t, p_t \}$ in the paper.
+`self.get_vmp_obs()` is used to construct motion frame $m_t = \[ h_t, \theta_t, v_t, q_t, \dot{q}_t, p_t \]$ in the paper.
 Note that $\theta_t$ is a 6D rotation representation proposed in [On the Continuity of Rotation Representations in Neural Networks](https://arxiv.org/abs/1812.07035)
 
 `self.fetch_vmp_obs_demo()` is used to construct the window slides, where the info is passed into self.extras["vmp_obs_window"] to be used in [vmp_agent.py](https://github.com/DavidLXu/VMP/blob/main/ase/learning/vmp_agent.py)
