@@ -3,7 +3,7 @@
 [VMP Paper](https://la.disneyresearch.com/publication/vmp-versatile-motion-priors-for-robustly-tracking-motion-on-physical-characters/)
 
 This code is largely based upon the implementation of [ASE](https://github.com/nv-tlabs/ASE), 
-utilizing the backbone of amp control, with modifications including the stage 1 VAE pretraining, composition of motion frames and motion window.
+utilizing the backbone of amp control, with modifications including the stage 1 VAE pretraining, composition of motion frames and motion window, and network integration for conditional policy.
 
 ## Dataset
 Currently only using the `amp_humanoid_jog.npy`, `amp_humanoid_walk.npy` and `amp_humanoid_run.npy` for the amp_humanoid. Retargeted motion data will be added shortly.
