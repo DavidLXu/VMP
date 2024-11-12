@@ -1,0 +1,87 @@
+Rigid Bodies:
+0: pelvis
+1: torso
+2: head
+3: right_upper_arm
+4: right_lower_arm
+5: right_hand
+# 6: sword
+7: left_upper_arm
+8: left_lower_arm
+# 9: shield
+10: left_hand
+11: right_thigh
+12: right_shin
+13: right_foot
+14: left_thigh
+15: left_shin
+16: left_foot
+
+Joints:
+0: abdomen_x
+1: abdomen_y
+2: abdomen_z
+3: neck_x
+4: neck_y
+5: neck_z
+6: right_shoulder_x
+7: right_shoulder_y
+8: right_shoulder_z
+9: right_elbow
+10: right_hand_x
+11: right_hand_y
+12: right_hand_z
+13: 
+14: left_shoulder_x
+15: left_shoulder_y
+16: left_shoulder_z
+17: left_elbow
+18: 
+19: 
+20: right_hip_x
+21: right_hip_y
+22: right_hip_z
+23: right_knee
+24: right_ankle_x
+25: right_ankle_y
+26: right_ankle_z
+27: left_hip_x
+28: left_hip_y
+29: left_hip_z
+30: left_knee
+31: left_ankle_x
+32: left_ankle_y
+33: left_ankle_z
+
+Degrees of Freedom:
+0: abdomen_x
+1: abdomen_y
+2: abdomen_z
+3: neck_x
+4: neck_y
+5: neck_z
+6: right_shoulder_x
+7: right_shoulder_y
+8: right_shoulder_z
+9: right_elbow
+# 10: right_hand_x
+# 11: right_hand_y
+# 12: right_hand_z
+13: left_shoulder_x
+14: left_shoulder_y
+15: left_shoulder_z
+16: left_elbow
+17: right_hip_x
+18: right_hip_y
+19: right_hip_z
+20: right_knee
+21: right_ankle_x
+22: right_ankle_y
+23: right_ankle_z
+24: left_hip_x
+25: left_hip_y
+26: left_hip_z
+27: left_knee
+28: left_ankle_x
+29: left_ankle_y
+30: left_ankle_z

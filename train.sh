@@ -37,18 +37,26 @@ python ase/run.py --test --task HumanoidAMP --num_envs 16 --cfg_env ase/data/cfg
 
 
 # vmp
-python ase/run.py --task HumanoidAMP \
-    --cfg_env ase/data/cfg/humanoid_sword_shield.yaml \
-    --cfg_train ase/data/cfg/train/rlg/vmp_humanoid.yaml \
-    --motion_file ase/data/motions/walk/dataset_reallusion_walk.yaml
-
+#  with sword shield
 python ase/run.py --task HumanoidVMP \
     --cfg_env ase/data/cfg/humanoid_sword_shield.yaml \
     --cfg_train ase/data/cfg/train/rlg/vmp_humanoid.yaml \
     --motion_file ase/data/motions/walk/dataset_reallusion_walk.yaml
+# without sword shield
+python ase/run.py --task HumanoidVMP \
+    --cfg_env ase/data/cfg/humanoid_vmp.yaml \
+    --cfg_train ase/data/cfg/train/rlg/vmp_humanoid.yaml \
+    --motion_file '/data/ASE/ase/data/motions/dataset_amp_walk.yaml'
 
+python ase/run.py --test --task HumanoidVMP --num_envs 16 \
+    --cfg_env ase/data/cfg/humanoid_vmp.yaml \
+    --cfg_train ase/data/cfg/train/rlg/vmp_humanoid.yaml \
+    --motion_file ase/data/motions/walk/dataset_reallusion_walk.yaml \
+     --checkpoint /data/ASE/output/Humanoid_12-05-25-15/nn/Humanoid.pth
 
+python ase/run.py --test --task HumanoidViewMotion --num_envs 2 \
+    --cfg_env ase/data/cfg/humanoid.yaml \
+    --cfg_train ase/data/cfg/train/rlg/amp_humanoid.yaml \
+    --motion_file ase/data/motions/walk/dataset_reallusion_walk.yaml
 
-
-
-
+python ase/run.py --test --task HumanoidViewMotion --num_envs 2  --cfg_env ase/data/cfg/humanoid_ase_getup.yaml --cfg_train ase/data/cfg/train/rlg/ase_humanoid.yaml --motion_file ase/data/motions/reallusion_sword_shield/dataset_reallusion_sword_shield.yaml

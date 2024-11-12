@@ -251,7 +251,16 @@ class HumanoidVMP(Humanoid):
         return
 
     def _load_motion(self, motion_file):
-        
+        # with sword and shield
+        # print(self._dof_body_ids) 
+        # print(self._dof_offsets) 
+        # [1, 2, 3, 4, 5, 7, 8, 11, 12, 13, 14, 15, 16]
+        # [0, 3, 6, 9, 10, 13, 16, 17, 20, 21, 24, 27, 28, 31]
+        # without
+        # [1, 2, 3, 4, 5, 7, 8, 10, 11, 12, 13, 14]
+        # [0, 3, 6, 9, 10, 13, 14, 17, 18, 21, 24, 25, 28]
+        # exit()
+
         assert(self._dof_offsets[-1] == self.num_dof)
         self._motion_lib = MotionLib(motion_file=motion_file,
                                      dof_body_ids=self._dof_body_ids,
@@ -304,7 +313,8 @@ class HumanoidVMP(Humanoid):
 
         root_pos, root_rot, dof_pos, root_vel, root_ang_vel, dof_vel, key_pos \
                = self._motion_lib.get_motion_state(motion_ids, motion_times)
-        
+        # print(dof_pos.shape)
+        # exit()
         self._set_env_state(env_ids=env_ids, 
                             root_pos=root_pos, 
                             root_rot=root_rot, 
@@ -560,10 +570,10 @@ class HumanoidVMP(Humanoid):
         q_t_diff = torch.norm(q_t_hat - q_t_ref, p=2, dim=-1)
         dq_t_diff = torch.norm(dq_t_hat - dq_t_ref, p=2, dim=-1)
         p_t_flat_diff = torch.norm(p_t_flat_hat - p_t_flat_ref, p=2, dim=-1)
-        print("differences",h_t_diff.mean(), theta_t_diff.mean(), v_t_diff.mean(), q_t_diff.mean(), dq_t_diff.mean(), p_t_flat_diff.mean())
+        # print("differences",h_t_diff.mean(), theta_t_diff.mean(), v_t_diff.mean(), q_t_diff.mean(), dq_t_diff.mean(), p_t_flat_diff.mean())
         # Sum all differences for tracking reward
         r_track = -(0.5*h_t_diff + theta_t_diff + v_t_diff + q_t_diff + 0.1*dq_t_diff + p_t_flat_diff)
-        print("r_track",r_track.mean())
+        # print("r_track",r_track.mean())
         r_alive = 6.0
         r_smooth = 0.0
         

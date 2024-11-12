@@ -208,8 +208,19 @@ class Humanoid(BaseTask):
         asset_file = self.cfg["env"]["asset"]["assetFileName"]
         num_key_bodies = len(key_bodies)
 
+        '''
+        # https://github.com/nv-tlabs/ASE/issues/43
+        
+        self._dof_body_ids = [1, 2, 3, 4, 5, 7, 8, 11, 12, 13, 14, 15, 16] # the index of links with joints
+        self._dof_offsets = [0, 3, 6, 9, 10, 13, 16, 17, 20, 21, 24, 27, 28, 31] # corresponding dofs of links
+        self._dof_obs_size = 78 # rotation of each link using a tangent-normal encoding (6D)
+        self._num_actions = 31 # corresponding dofs of links
+        self._num_obs = 1 + 17 * (3 + 6 + 3 + 3) - 3 # total links * ( Position + Linear velocity + Rotation + Angular velocity)
+        '''
+
         if (asset_file == "mjcf/amp_humanoid.xml"):
             self._dof_body_ids = [1, 2, 3, 4, 6, 7, 9, 10, 11, 12, 13, 14]
+            # self._dof_body_ids = [1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 13, 14]
             self._dof_offsets = [0, 3, 6, 9, 10, 13, 14, 17, 18, 21, 24, 25, 28]
             self._dof_obs_size = 72
             self._num_actions = 28
@@ -282,6 +293,24 @@ class Humanoid(BaseTask):
         self.num_bodies = self.gym.get_asset_rigid_body_count(humanoid_asset)
         self.num_dof = self.gym.get_asset_dof_count(humanoid_asset)
         self.num_joints = self.gym.get_asset_joint_count(humanoid_asset)
+
+        # 15 28 30
+        # 17 31 34
+        # print(self.num_bodies,self.num_dof,self.num_joints)
+        
+        
+        # print("\nRigid Bodies:")
+        # for i in range(self.num_bodies):
+        #     print(f"{i}: {self.gym.get_asset_rigid_body_name(humanoid_asset, i)}")
+
+        # print("\nJoints:")
+        # for i in range(self.num_joints):
+        #     print(f"{i}: {self.gym.get_asset_joint_name(humanoid_asset, i)}")
+
+        # print("\nDegrees of Freedom:")
+        # for i in range(self.num_dof):
+        #     print(f"{i}: {self.gym.get_asset_dof_name(humanoid_asset, i)}")
+        # exit()
 
         self.humanoid_handles = []
         self.envs = []

@@ -151,7 +151,6 @@ class HumanoidAMP(Humanoid):
         return
 
     def _load_motion(self, motion_file):
-        
         assert(self._dof_offsets[-1] == self.num_dof)
         self._motion_lib = MotionLib(motion_file=motion_file,
                                      dof_body_ids=self._dof_body_ids,

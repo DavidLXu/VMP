@@ -25,9 +25,16 @@ class MotionDataset(Dataset):
 
 
         # modify this before changing robot, refer to humanoid_amp.py, print in _load_motion
-        self._dof_body_ids = torch.tensor([1, 2, 3, 4, 5, 7, 8, 11, 12, 13, 14, 15, 16], device='cuda:0')
-        self._dof_offsets = torch.tensor([0, 3, 6, 9, 10, 13, 16, 17, 20, 21, 24, 27, 28, 31], device='cuda:0')
-        self._key_body_ids = torch.tensor([5, 10, 13, 16, 6, 9], device='cuda:0')
+
+        with_sword_shield = False
+        if with_sword_shield:
+            self._dof_body_ids = torch.tensor([1, 2, 3, 4, 5, 7, 8, 11, 12, 13, 14, 15, 16], device='cuda:0')
+            self._dof_offsets = torch.tensor([0, 3, 6, 9, 10, 13, 16, 17, 20, 21, 24, 27, 28, 31], device='cuda:0')
+            self._key_body_ids = torch.tensor([5, 10, 13, 16, 6, 9], device='cuda:0')
+        else:
+            self._dof_body_ids = torch.tensor([1, 2, 3, 4, 6, 7, 9, 10, 11, 12, 13, 14], device='cuda:0')
+            self._dof_offsets = torch.tensor([0, 3, 6, 9, 10, 13, 14, 17, 18, 21, 24, 25, 28], device='cuda:0')
+            self._key_body_ids = torch.tensor([ 5,  8, 11, 14], device='cuda:0')
         self.device = 'cuda:0'
 
         # TODO: put to cfg

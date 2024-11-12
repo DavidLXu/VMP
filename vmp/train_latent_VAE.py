@@ -153,6 +153,7 @@ if __name__ == "__main__":
 
     W = 30
     window_length = 2 * W + 1
+    input_dim = 81 # 93
     motion_dataset = MotionDataset(motion_file=motion_combo,
                             num_motions=1000,
                             window_length=window_length)  # 1 second window
@@ -161,7 +162,7 @@ if __name__ == "__main__":
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    vae = VAE(input_dim=93, window_length=window_length).to(device)  # input_dim is feature_dim since we transpose
+    vae = VAE(input_dim=input_dim, window_length=window_length).to(device)  # input_dim is feature_dim since we transpose
 
     # Print total number of parameters
     total_params = sum(p.numel() for p in vae.parameters())
